@@ -53,9 +53,11 @@ public class Camera<Pixel : CameraPixel> {
     private let delegate: Delegate<Pixel>
     
     private var session: AVCaptureSession
-    private var frame: Image<Pixel>?
+    private var frameQueue: [Image<Pixel>] = []
+
+    private var handler: ((inout Image<Pixel>) -> Void)?
     
-    private var handler: ((Image<Pixel>) -> Void)?
+    private let lock: NSLock = NSLock()
     
     public init(
         sessionPreset: AVCaptureSession.Preset = .vga640x480,
@@ -101,7 +103,7 @@ public class Camera<Pixel : CameraPixel> {
         delegate.camera = self
     }
     
-    public func start(_ handler: @escaping (Image<Pixel>) -> Void) {
+    public func start(_ handler: @escaping (inout Image<Pixel>) -> Void) {
         guard self.handler == nil else { return }
         self.handler = handler
         session.startRunning()
@@ -124,21 +126,29 @@ extension Camera {
             let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)!
             let width = CVPixelBufferGetWidth(imageBuffer)
             let height = CVPixelBufferGetHeight(imageBuffer)
-            
-            var frame = camera.frame ?? Image<Pixel>(width: width, height: height, pixel: Pixel.cameraPixelDefaultValue)
+
+            var frame: Image<Pixel> = synchronized(with: camera.lock) {
+                if camera.frameQueue.isEmpty {
+                    camera.frameQueue.append(Image<Pixel>(width: width, height: height, pixel: Pixel.cameraPixelDefaultValue))
+                }
+                return camera.frameQueue.remove(at: 0)
+            }
             do {
-                camera.frame = nil
-                defer { camera.frame = frame }
+                CVPixelBufferLockBaseAddress(imageBuffer, .readOnly)
+                defer { CVPixelBufferUnlockBaseAddress(imageBuffer, .readOnly) }
                 
-                do {
-                    CVPixelBufferLockBaseAddress(imageBuffer, .readOnly)
-                    defer { CVPixelBufferUnlockBaseAddress(imageBuffer, .readOnly) }
-                    
-                    Pixel.cameraPixelCopy(buffer: imageBuffer, to: &frame)
+                Pixel.cameraPixelCopy(buffer: imageBuffer, to: &frame)
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let `self` = self else { return }
+                guard let camera = self.camera else { return }
+                
+                synchronized(with: camera.lock) {
+                    camera.handler?(&frame)
+                    camera.frameQueue.append(frame)
                 }
             }
-            
-            camera.handler?(frame)
         }
     }
 }
@@ -148,4 +158,10 @@ public struct CameraError : Error {
     public init(message: String) {
         self.message = message
     }
+}
+
+private func synchronized<T>(with lock: NSLock, _ operation: () -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return operation()
 }
