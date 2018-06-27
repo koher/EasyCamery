@@ -34,6 +34,41 @@ class ViewController: UIViewController {
 }
 ```
 
+## Installation
+
+### Swift Package Manager
+
+**Package.swift**
+
+```swift
+// swift-tools-version:4.0
+// The swift-tools-version declares the minimum version of Swift required to build this package.
+
+import PackageDescription
+
+let package = Package(
+  ...
+  dependencies: [
+    .package(url: "https://github.com/koher/EasyCamery.git", .branch("master")),
+  ],
+  targets: [
+    .target(
+      ...
+      dependencies: [
+        "EasyCamery",
+      ]),
+    ]
+)
+```
+
+### [Carthage](https://github.com/Carthage/Carthage)
+
+**Cartfile** 
+
+```
+github "koher/EasyCamery" "master"
+```
+
 ## License
 
 MIT
