@@ -20,9 +20,12 @@ extension RGBA : CameraPixel where Channel == UInt8 {
         precondition(!CVPixelBufferIsPlanar(buffer))
         
         let baseAddress = CVPixelBufferGetBaseAddress(buffer)!
-        let pointer = UnsafeRawBufferPointer(start: baseAddress, count: image.count)
+        let pointer = UnsafeRawBufferPointer(start: baseAddress, count: image.count * 4)
         image.withUnsafeMutableBytes {
             $0.copyMemory(from: pointer)
+        }
+        image.update { pixel in
+            swap(&pixel.red, &pixel.blue)
         }
     }
 }
@@ -48,10 +51,11 @@ extension UInt8 : CameraPixel {
 
 public class Camera<Pixel : CameraPixel> {
     private let delegate: Delegate<Pixel>
+    
     private var session: AVCaptureSession
     private var frame: Image<Pixel>?
     
-    private var isActive: Bool = false
+    private var handler: ((Image<Pixel>) -> Void)?
     
     public init(
         sessionPreset: AVCaptureSession.Preset = .vga640x480,
@@ -97,16 +101,16 @@ public class Camera<Pixel : CameraPixel> {
         delegate.camera = self
     }
     
-    public func start(_ handler: (Image<Pixel>) -> Void) {
-        guard !isActive else { return }
-        isActive = !isActive
+    public func start(_ handler: @escaping (Image<Pixel>) -> Void) {
+        guard self.handler == nil else { return }
+        self.handler = handler
         session.startRunning()
     }
     
     public func stop() {
-        guard isActive else { return }
-        isActive = !isActive
+        guard handler != nil else { return }
         session.stopRunning()
+        handler = nil
     }
 }
 
@@ -133,6 +137,8 @@ extension Camera {
                     Pixel.cameraPixelCopy(buffer: imageBuffer, to: &frame)
                 }
             }
+            
+            camera.handler?(frame)
         }
     }
 }
