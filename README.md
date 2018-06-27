@@ -15,9 +15,14 @@ class ViewController: UIViewController {
         super.viewDidAppear(animated)
         
         camera.start { [weak self] image in
-            DispatchQueue.main.async {
-                self?.imageView.image = image.uiImage
+            // Makes `image` negative
+            image.update { pixel in
+                pixel.red = 255 - pixel.red
+                pixel.green = 255 - pixel.green
+                pixel.blue = 255 - pixel.blue
             }
+            
+            self?.imageView.image = image.uiImage
         }
     }
     
