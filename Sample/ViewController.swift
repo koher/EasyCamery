@@ -19,7 +19,7 @@ class ViewController: UIViewController {
                 pixel.blue = 255 - pixel.blue
             }
             
-            self?.imageView.image = image.uiImage
+            self?.imageView.image = image.uiImage(orientedTo: UIApplication.shared.cameraOrientation)
         }
     }
     
@@ -27,5 +27,23 @@ class ViewController: UIViewController {
         camera.stop()
         
         super.viewWillDisappear(animated)
+    }
+}
+
+extension Image where Pixel == RGBA<UInt8> {
+    func uiImage(orientedTo orientation: UIImageOrientation) -> UIImage {
+        return UIImage(cgImage: cgImage, scale: 1.0, orientation: orientation)
+    }
+}
+
+extension UIApplication {
+    var cameraOrientation: UIImageOrientation {
+        switch statusBarOrientation {
+        case .portrait:           return .right
+        case .landscapeRight:     return .up
+        case .portraitUpsideDown: return .left
+        case .landscapeLeft:      return .down
+        case .unknown:            return .right
+        }
     }
 }
